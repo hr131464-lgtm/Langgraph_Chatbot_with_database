@@ -33,7 +33,7 @@ This project demonstrates how to create a stateful conversational AI application
 ---
 
 
-# 📋 Requirements
+# Requirements
 
 ```txt
 langgraph
@@ -84,6 +84,3 @@ If you'd like to improve this project:
 
 
 
-# ⭐ Support
-
-If you found this project helpful, consider giving it a ⭐ on GitHub.
