@@ -36,8 +36,25 @@ chatbot = graph.compile(checkpointer=checkpointer)
 CONFIG = {"configurable": {"thread_id": "thread-1"}}
 
 def retrieve_all_threads():
-    all_threads= set()
-    for checkpoint in checkpointer.list(None):
-        all_threads.add(checkpoint.config['configurable']['thread_id'])
+    threads = []
 
-    return(list(all_threads))
+    for checkpoint in checkpointer.list(None):
+        threads.append(checkpoint.config["configurable"]["thread_id"])
+
+    return sorted(set(threads))
+
+    cursor = conn.cursor()
+
+    # Delete all writes for this thread
+    cursor.execute(
+        "DELETE FROM writes WHERE thread_id = ?",
+        (str(thread_id),)
+    )
+
+    # Delete all checkpoints for this thread
+    cursor.execute(
+        "DELETE FROM checkpoints WHERE thread_id = ?",
+        (str(thread_id),)
+    )
+
+    conn.commit()

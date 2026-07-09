@@ -3,69 +3,80 @@ from langgraph_backend import chatbot, retrieve_all_threads
 from langchain_core.messages import HumanMessage, AIMessage
 import uuid
 
+# -----------------------------
 # Helper Functions
-
+# -----------------------------
 
 def generate_thread_id():
-    return uuid.uuid4()
+    return str(uuid.uuid4())
 
 
 def add_thread(thread_id):
-    if thread_id not in st.session_state["chat_threads"]:
-        st.session_state["chat_threads"].append(thread_id)
+    if thread_id not in st.session_state.chat_threads:
+        st.session_state.chat_threads.append(thread_id)
 
 
 def reset_chat():
-    thread_id = generate_thread_id()
+    new_thread = generate_thread_id()
 
-    st.session_state["thread_id"] = thread_id
-    st.session_state["message_history"] = []
+    st.session_state.thread_id = new_thread
+    st.session_state.message_history = []
 
-    add_thread(thread_id)
+    add_thread(new_thread)
 
 
 def load_conversation(thread_id):
     state = chatbot.get_state(
-        config={"configurable": {"thread_id": thread_id}}
+        config={
+            "configurable": {
+                "thread_id": thread_id
+            }
+        }
     )
 
     return state.values.get("messages", [])
 
-# Session State
 
+# -----------------------------
+# Session State
+# -----------------------------
 
 if "message_history" not in st.session_state:
-    st.session_state["message_history"] = []
+    st.session_state.message_history = []
 
 if "thread_id" not in st.session_state:
-    st.session_state["thread_id"] = generate_thread_id()
+    st.session_state.thread_id = generate_thread_id()
 
 if "chat_threads" not in st.session_state:
-    st.session_state["chat_threads"] = retrieve_all_threads()
+    st.session_state.chat_threads = retrieve_all_threads()
+
+add_thread(st.session_state.thread_id)
 
 
-add_thread(st.session_state["thread_id"])
-
-
+# -----------------------------
 # Sidebar
+# -----------------------------
 
 st.sidebar.title("🤖 LangGraph Chatbot")
 
 if st.sidebar.button("➕ New Chat", use_container_width=True):
     reset_chat()
+    st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Recent Chats")
 
-for thread_id in st.session_state["chat_threads"][::-1]:
+
+for thread_id in reversed(st.session_state.chat_threads):
 
     messages = load_conversation(thread_id)
 
     title = "New Chat"
 
-    # Use first user message as title
     for msg in messages:
+
         if isinstance(msg, HumanMessage):
+
             title = msg.content.strip()
 
             if len(title) > 35:
@@ -73,92 +84,80 @@ for thread_id in st.session_state["chat_threads"][::-1]:
 
             break
 
-    current = thread_id == st.session_state["thread_id"]
+    current_chat = thread_id == st.session_state.thread_id
 
-    icon = "🟢" if current else "💬"
+    icon = "🟢" if current_chat else "💬"
 
     if st.sidebar.button(
         f"{icon} {title}",
-        key=str(thread_id),
+        key=f"chat_{thread_id}",
         use_container_width=True
     ):
 
-        st.session_state["thread_id"] = thread_id
+        st.session_state.thread_id = thread_id
 
-        temp_messages = []
+        history = []
 
         for msg in messages:
 
-            role = "user" if isinstance(msg, HumanMessage) else "assistant"
-
-            temp_messages.append(
+            history.append(
                 {
-                    "role": role,
-                    "content": msg.content,
+                    "role": "user"
+                    if isinstance(msg, HumanMessage)
+                    else "assistant",
+
+                    "content": msg.content
                 }
             )
 
-        st.session_state["message_history"] = temp_messages
+        st.session_state.message_history = history
 
         st.rerun()
 
 
+# -----------------------------
+# Display Chat History
+# -----------------------------
 
-# Chat History
+for message in st.session_state.message_history:
 
-
-for message in st.session_state["message_history"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 
-# Chat Input
+# -----------------------------
+# User Input
+# -----------------------------
 
-
-user_input = st.chat_input("Type here")
+user_input = st.chat_input("Type your message...")
 
 if user_input:
 
-    # Add user message
-
-    st.session_state["message_history"].append(
+    st.session_state.message_history.append(
         {
             "role": "user",
-            "content": user_input,
+            "content": user_input
         }
     )
-
-    # -------- Save Chat Title --------
-
-    thread_key = str(st.session_state["thread_id"])
-
-    if thread_key not in st.session_state["chat_titles"]:
-
-        title = user_input.strip()
-
-        if len(title) > 35:
-            title = title[:35] + "..."
-
-        st.session_state["chat_titles"][thread_key] = title
 
     with st.chat_message("user"):
         st.markdown(user_input)
 
     CONFIG = {
         "configurable": {
-            "thread_id": st.session_state["thread_id"]
+            "thread_id": st.session_state.thread_id
         },
         "metadata": {
-            "thread_id": st.session_state["thread_id"]
+            "thread_id": st.session_state.thread_id
         },
-        "run_name": "chat_turn",
+        "run_name": "chat_turn"
     }
 
     with st.chat_message("assistant"):
 
-        def ai_only_stream():
+        def ai_stream():
 
-            for message_chunk, metadata in chatbot.stream(
+            for chunk, metadata in chatbot.stream(
                 {
                     "messages": [
                         HumanMessage(content=user_input)
@@ -168,14 +167,14 @@ if user_input:
                 stream_mode="messages",
             ):
 
-                if isinstance(message_chunk, AIMessage):
-                    yield message_chunk.content
+                if isinstance(chunk, AIMessage):
+                    yield chunk.content
 
-        ai_message = st.write_stream(ai_only_stream())
+        ai_response = st.write_stream(ai_stream())
 
-    st.session_state["message_history"].append(
+    st.session_state.message_history.append(
         {
             "role": "assistant",
-            "content": ai_message,
+            "content": ai_response
         }
     )
