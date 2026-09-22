@@ -24,3 +24,8 @@ Thumbs.db
 
 # Logs
 *.log
+
+# SQLite database
+chatbot.db
+chatbot.db-shm
+chatbot.db-wal
